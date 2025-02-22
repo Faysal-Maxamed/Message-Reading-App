@@ -4,6 +4,7 @@ import 'package:reading_messege_app/home_screen.dart';
 
 void main() {
   runApp(GetMaterialApp(
+    debugShowCheckedModeBanner: false,
     home: HomeScreen(),
   ));
 }

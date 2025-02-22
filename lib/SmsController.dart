@@ -5,7 +5,9 @@ import 'package:permission_handler/permission_handler.dart';
 class Smscontroller extends GetxController {
   var allMessages = <SmsMessage>[].obs;
 
-  requstsms() async {
+
+  
+void requestPermissions() async {
     var status = await Permission.sms.request();
     if (status.isGranted) {
       fetchInboxMessages();
@@ -14,10 +16,11 @@ class Smscontroller extends GetxController {
     }
   }
 
+
   fetchInboxMessages() async {
     final Telephony telephony = Telephony.instance;
     List<SmsMessage> messages = await telephony.getInboxSms();
     allMessages.value = messages;
-    
+
   }
 }
