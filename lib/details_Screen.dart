@@ -1,55 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:reading_messege_app/SmsController.dart';
+import 'package:another_telephony/telephony.dart';
 
-class DetailsScreen extends StatelessWidget {
+class MessageDetailPage extends StatelessWidget {
   final String sender;
-  final smscotroller = Get.find<Smscontroller>();
+  final List<SmsMessage> messages;
 
-  DetailsScreen({super.key, required this.sender});
+  MessageDetailPage({required this.sender, required this.messages});
 
   @override
   Widget build(BuildContext context) {
-    var senderMessages =
-        smscotroller.allMessages.where((msg) => msg.address == sender).toList();
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          sender,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        backgroundColor: Color(
-          0xff4A3F69,
-        ),
-        foregroundColor: Colors.white,
-      ),
-      backgroundColor: Color(0xfff5f5f5),
-      body: senderMessages.isEmpty
-          ? Center(child: Text("No messages from $sender"))
-          : ListView.builder(
-              padding: EdgeInsets.all(10),
-              itemCount: senderMessages.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  color: Colors.white,
-                  elevation: 2,
-                  margin: EdgeInsets.symmetric(vertical: 5),
-                  child: ListTile(
-                    leading: Icon(Icons.message, color: Colors.blue),
-                    title: Text(
-                      senderMessages[index].body ?? "No content",
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    subtitle: Text(
-                      senderMessages[index].dateSent.toString(),
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                );
-              },
+      appBar: AppBar(title: Text('Messages from $sender')),
+      body: ListView.builder(
+        reverse: true,
+        itemCount: messages.length,
+        itemBuilder: (context, index) {
+          final message = messages[index];
+          return Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Card(
+              elevation: 5,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+              ),
+              child: ListTile(
+                title: Text(message.body ?? 'No message content'),
+                subtitle: Text('Received: ${message.dateSent}'),
+              ),
             ),
+          );
+        },
+      ),
     );
   }
 }

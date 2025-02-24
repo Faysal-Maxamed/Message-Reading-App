@@ -1,114 +1,228 @@
+import 'package:another_telephony/telephony.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:reading_messege_app/SmsController.dart';
 import 'package:reading_messege_app/details_Screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
-
+class SmsListener extends StatefulWidget {
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  _SmsListenerState createState() => _SmsListenerState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  var smscotroller = Get.put(Smscontroller());
-  Set<String> readMessages = {}; 
+class _SmsListenerState extends State<SmsListener>
+    with SingleTickerProviderStateMixin {
+  final Telephony telephony = Telephony.instance;
+  String _newMessage = '';
+  Map<String, List<SmsMessage>> _groupedMessages = {};
+  List<SmsMessage> _newMessages = [];
+  late TabController _tabController;
+  List<SmsMessage> _readMessages = [];
 
   @override
   void initState() {
     super.initState();
-    smscotroller.requestPermissions();
+    _tabController = TabController(length: 2, vsync: this);
+
+    telephony.listenIncomingSms(
+      onNewMessage: (SmsMessage message) {
+        setState(() {
+          _newMessage = message.body ?? 'Fariin aan jirin';
+          _groupMessages(message);
+          _newMessages.add(message);
+        });
+        print('Fariin cusub oo SMS ah: ${message.body}');
+      },
+      onBackgroundMessage: backgroundMessageHandler,
+    );
+
+    loadInboxMessages();
   }
 
- 
-  Map<String, List<dynamic>> getUniqueMessages() {
-    Map<String, List<dynamic>> messageMap = {};
-
-    for (var message in smscotroller.allMessages) {
-      if (message.address != null) {
-        if (!messageMap.containsKey(message.address)) {
-          messageMap[message.address!] = [];
-        }
-        messageMap[message.address!]!.add(message);
+  void loadInboxMessages() async {
+    List<SmsMessage> messages = await telephony.getInboxSms();
+    setState(() {
+      _groupedMessages.clear();
+      for (var message in messages) {
+        _groupMessages(message);
       }
+    });
+  }
+
+  void _groupMessages(SmsMessage message) {
+    if (message.address == '192') {
+      _groupedMessages['192_${message.date}'] = [message];
+    } else if (_groupedMessages.containsKey(message.address)) {
+      _groupedMessages[message.address]?.add(message);
+    } else {
+      _groupedMessages[message.address.toString()] = [message];
     }
-    return messageMap;
+  }
+
+  /// Extracts sender's phone number from the message body if it's from 192
+  String _extractSenderNumber(String? body) {
+    if (body == null || !body.contains(':')) return 'Unknown';
+    return body.split(':')[0].trim(); // Extract sender's number before ":"
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xffe3f9ff),
       appBar: AppBar(
-        systemOverlayStyle:
-            SystemUiOverlayStyle(systemNavigationBarColor: Color(0xffe3f9ff)),
-        backgroundColor: Color(0xffe3f9ff),
-        title: Text(
-          "Messages",
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 30),
+        title: Text('Messages App'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: 'Inbox'),
+            Tab(
+              text: _newMessages.isNotEmpty
+                  ? 'New Message (${_newMessages.length})'
+                  : 'New Message',
+            ),
+          ],
         ),
-        centerTitle: true,
-        foregroundColor: Color(0xff4A3F69),
       ),
-      body: Obx(
-        () {
-          var uniqueMessages = getUniqueMessages();
-          return uniqueMessages.isEmpty
-              ? Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  itemCount: uniqueMessages.length,
-                  itemBuilder: (context, index) {
-                    String sender = uniqueMessages.keys.elementAt(index);
-                    List<dynamic> senderMessages = uniqueMessages[sender]!;
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _groupedMessages.isNotEmpty
+                    ? Expanded(
+                        child: ListView.builder(
+                          itemCount: _groupedMessages.length,
+                          itemBuilder: (context, index) {
+                            final sender =
+                                _groupedMessages.keys.elementAt(index);
+                            final messages = _groupedMessages[sender]!;
 
-                    int unreadCount = readMessages.contains(sender)
-                        ? 0
-                        : senderMessages
-                            .length; 
+                            // If message is from 192, display sender's number from body
+                            String displaySender =
+                                messages.first.address == '192'
+                                    ? _extractSenderNumber(messages.first.body)
+                                    : messages.first.address ?? 'Unknown';
 
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          readMessages.add(
-                              sender);
-                        });
-                        Get.to(() => DetailsScreen(sender: sender));
-                      },
-                      child: Card(
-                        color: Color(0xffe3f9ff),
-                        elevation: 10,
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.blue,
-                          ),
-                          title: Text(sender),
-                          subtitle: Text(
-                            senderMessages.last.body ?? "",
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: unreadCount > 0
-                              ? CircleAvatar(
-                                  backgroundColor: Colors.red,
-                                  radius: 12,
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => MessageDetailPage(
+                                      sender: sender,
+                                      messages: messages,
                                     ),
                                   ),
-                                )
-                              : null, 
+                                );
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 10.0),
+                                child: Card(
+                                  color: Colors.white,
+                                  elevation: 5,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                  child: ListTile(
+                                    contentPadding: EdgeInsets.all(12),
+                                    title: Text(
+                                      'SMS from: $displaySender',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      '${messages.first.body}',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: Colors.black54),
+                                    ),
+                                    trailing: Icon(
+                                      Icons.message,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
+                      )
+                    : Text(
+                        'Inbox waa madhan!',
+                        style: TextStyle(fontSize: 18, color: Colors.red),
                       ),
-                    );
-                  },
-                );
-        },
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _newMessages.isNotEmpty
+                    ? Expanded(
+                        child: ListView.builder(
+                          itemCount: _newMessages.length,
+                          itemBuilder: (context, index) {
+                            final message = _newMessages[index];
+                            return GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => MessageDetailPage(
+                                      sender: message.address ?? 'Unknown',
+                                      messages: [message],
+                                    ),
+                                  ),
+                                );
+                                setState(() {
+                                  _readMessages.add(message);
+                                  _newMessages.removeAt(index);
+                                });
+                              },
+                              child: Card(
+                                elevation: 5,
+                                margin: EdgeInsets.only(bottom: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.all(12),
+                                  title: Text(
+                                    'New SMS: ${message.address}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    message.body ?? 'Unknown',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                  trailing: Icon(
+                                    Icons.message,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                    : Text(
+                        'Fariin cusub ma jiraan!',
+                        style: TextStyle(fontSize: 18, color: Colors.blue),
+                      ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+Future<void> backgroundMessageHandler(SmsMessage message) async {
+  print('Received background message: ${message.body}');
 }
